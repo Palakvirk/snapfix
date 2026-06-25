@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { signOut } from "firebase/auth";
 import { collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp } from "firebase/firestore";
@@ -5,6 +6,11 @@ import { ref, set } from "firebase/database";
 import { auth, db, rtdb } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+
+const CLOUDINARY_CLOUD = "dco6umicr";
+const CLOUDINARY_PRESET = "snapfix";
+
+
 
 const CATEGORIES = [
   { value: "plumbing", label: "🔧 Plumbing", color: "#3B82F6", bg: "#EFF6FF" },
@@ -39,6 +45,7 @@ const ResidentDashboard = () => {
   const [issues, setIssues] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [form, setForm] = useState({
     title: "", description: "", category: "plumbing",
@@ -64,6 +71,27 @@ const ResidentDashboard = () => {
     return unsub;
   }, [currentUser]);
 
+
+  const handleImageUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setUploadingImage(true);
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_PRESET);
+  try {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    setForm((prev) => ({ ...prev, imageUrl: data.secure_url }));
+  } catch (err) {
+    console.error("Image upload failed:", err);
+  }
+  setUploadingImage(false);
+};
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -79,13 +107,14 @@ const ResidentDashboard = () => {
         eta: null,
       });
       await set(ref(rtdb, `pings/${form.category}`), {
-        issueId: issueRef.id,
-        category: form.category,
-        title: form.title,
-        severity: form.severity,
-        userEmail: currentUser.email,
-        timestamp: Date.now(),
-      });
+  issueId: issueRef.id,
+  category: form.category,
+  title: form.title,
+  severity: form.severity,
+  userEmail: currentUser.email,
+  imageUrl: form.imageUrl || null,
+  timestamp: Date.now(),
+});
       setForm({ title: "", description: "", category: "plumbing", imageUrl: "", severity: "medium" });
       setShowForm(false);
     } catch (err) {
@@ -237,10 +266,20 @@ const ResidentDashboard = () => {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
                   <div>
-                    <label style={lbl}>Photo URL (optional)</label>
-                    <input style={inp} placeholder="Paste image link..."
-                      value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} />
-                  </div>
+  <label style={lbl}>Photo</label>
+  <input
+    type="file"
+    accept="image/*"
+    onChange={handleImageUpload}
+    style={{ ...inp, padding: "0.4rem" }}
+  />
+  {uploadingImage && (
+    <p style={{ fontSize: "0.75rem", color: "#2563EB", marginTop: "4px" }}>Uploading...</p>
+  )}
+  {form.imageUrl && (
+    <img src={form.imageUrl} alt="preview" style={{ marginTop: "8px", width: "80px", height: "80px", borderRadius: "8px", objectFit: "cover" }} />
+  )}
+</div>
                   <div>
                     <label style={lbl}>Severity</label>
                     <select style={inp} value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>

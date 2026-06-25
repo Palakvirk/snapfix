@@ -189,54 +189,60 @@ const AdminDashboard = () => {
               ) : filtered.map((issue) => {
                 const s = STATUS_COLORS[issue.status] || STATUS_COLORS.pending;
                 return (
-                  <div key={issue.id} style={{ background: "white", borderRadius: "14px", padding: "1.1rem 1.25rem", border: "1px solid #E2E8F0", borderLeft: `4px solid ${s.color}` }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.92rem" }}>{issue.title}</span>
-                          <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: s.bg, color: s.color, fontWeight: 600, textTransform: "capitalize" }}>{issue.status.replace("_", " ")}</span>
-                          {issue.severity === "high" && (
-                            <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: "#FEF2F2", color: "#DC2626", fontWeight: 600 }}>Urgent</span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: "0.8rem", color: "#64748B", marginBottom: "6px" }}>{issue.description}</div>
-                        <div style={{ display: "flex", gap: "12px", fontSize: "0.75rem", color: "#94A3B8", flexWrap: "wrap" }}>
-                          <span>{timeAgo(issue.createdAt)}</span>
-                          <span>By: {issue.userEmail}</span>
-                          {issue.professionalName && <span>Worker: {issue.professionalName}</span>}
-                          {issue.eta && <span>ETA: {issue.eta}</span>}
-                        </div>
-                      </div>
-                      {/* Actions */}
-                      {issue.status !== "completed" && (
-                        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-                          {issue.status !== "escalated" && (
-                            <button onClick={() => markEscalated(issue.id)} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
-                              Escalate
-                            </button>
-                          )}
-                          <button onClick={() => setAssigningId(assigningId === issue.id ? null : issue.id)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
-                            Assign
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {/* Assign Panel */}
-                    {assigningId === issue.id && (
-                      <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #E2E8F0", display: "flex", gap: "8px" }}>
-                        <select style={{ ...inp, flex: 1 }} value={selectedPro} onChange={(e) => setSelectedPro(e.target.value)}>
-                          <option value="">Select a worker...</option>
-                          {professionals.filter(p => !p.specialty || p.specialty === issue.category).map((p) => (
-                            <option key={p.id} value={p.id}>{p.name || p.email} ({p.specialty || "any"})</option>
-                          ))}
-                        </select>
-                        <button onClick={() => handleAssign(issue.id)} style={{ background: "#2563EB", color: "white", border: "none", borderRadius: "8px", padding: "0 16px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}>
-                          Confirm
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
+  <div key={issue.id} style={{ background: "white", borderRadius: "14px", padding: "1.1rem 1.25rem", border: "1px solid #E2E8F0", borderLeft: `4px solid ${s.color}` }}>
+    {/* Image if exists */}
+    {issue.imageUrl && (
+      <img
+        src={issue.imageUrl}
+        alt="Issue"
+        style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "10px", marginBottom: "12px" }}
+      />
+    )}
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.92rem" }}>{issue.title}</span>
+          <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: s.bg, color: s.color, fontWeight: 600, textTransform: "capitalize" }}>{issue.status.replace("_", " ")}</span>
+          {issue.severity === "high" && (
+            <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: "#FEF2F2", color: "#DC2626", fontWeight: 600 }}>Urgent</span>
+          )}
+        </div>
+        <div style={{ fontSize: "0.8rem", color: "#64748B", marginBottom: "6px" }}>{issue.description}</div>
+        <div style={{ display: "flex", gap: "12px", fontSize: "0.75rem", color: "#94A3B8", flexWrap: "wrap" }}>
+          <span>{timeAgo(issue.createdAt)}</span>
+          <span>By: {issue.userEmail}</span>
+          {issue.professionalName && <span>Worker: {issue.professionalName}</span>}
+          {issue.eta && <span>ETA: {issue.eta}</span>}
+        </div>
+      </div>
+      {issue.status !== "completed" && (
+        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+          {issue.status !== "escalated" && (
+            <button onClick={() => markEscalated(issue.id)} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
+              Escalate
+            </button>
+          )}
+          <button onClick={() => setAssigningId(assigningId === issue.id ? null : issue.id)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
+            Assign
+          </button>
+        </div>
+      )}
+    </div>
+    {assigningId === issue.id && (
+      <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #E2E8F0", display: "flex", gap: "8px" }}>
+        <select style={{ ...inp, flex: 1 }} value={selectedPro} onChange={(e) => setSelectedPro(e.target.value)}>
+          <option value="">Select a worker...</option>
+          {professionals.filter(p => !p.specialty || p.specialty === issue.category).map((p) => (
+            <option key={p.id} value={p.id}>{p.name || p.email} ({p.specialty || "any"})</option>
+          ))}
+        </select>
+        <button onClick={() => handleAssign(issue.id)} style={{ background: "#2563EB", color: "white", border: "none", borderRadius: "8px", padding: "0 16px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}>
+          Confirm
+        </button>
+      </div>
+    )}
+  </div>
+);
               })}
             </div>
           )}

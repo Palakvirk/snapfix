@@ -219,9 +219,19 @@ const ProfessionalDashboard = () => {
             <div style={{ background: "#0A0F1C", borderRadius: "16px", padding: "1.5rem", marginBottom: "1.5rem", border: "1px solid #1E3A5F" }}>
               <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "#F59E0B", letterSpacing: "0.08em", marginBottom: "10px" }}>INCOMING JOB REQUEST</div>
               <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "white", marginBottom: "6px" }}>{currentPing.title}</div>
-              <div style={{ fontSize: "0.82rem", color: "#64748B", marginBottom: "1.25rem", textTransform: "capitalize" }}>
-                {currentPing.category} · {currentPing.severity} severity · Requested by {currentPing.userEmail}
-              </div>
+              <div style={{ fontSize: "0.82rem", color: "#64748B", marginBottom: "1rem", textTransform: "capitalize" }}>
+  {currentPing.category} · {currentPing.severity} severity · Requested by {currentPing.userEmail}
+</div>
+{currentPing.imageUrl && (
+  <img
+    src={currentPing.imageUrl}
+    alt="Issue"
+    style={{
+      width: "100%", maxHeight: "200px", objectFit: "cover",
+      borderRadius: "10px", marginBottom: "1rem",
+    }}
+  />
+)}
               {showEta ? (
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
