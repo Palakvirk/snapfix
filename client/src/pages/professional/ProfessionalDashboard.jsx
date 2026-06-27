@@ -100,7 +100,18 @@ const ProfessionalDashboard = () => {
     }
 
     playAlertSound();
-    setCountdown(60);
+setCountdown(60);
+
+// Repeat beep every 5 seconds while ping is active
+const beepInterval = setInterval(() => {
+  playAlertSound();
+}, 5000);
+
+return () => {
+  clearInterval(beepInterval);
+  clearInterval(countdownRef.current);
+  clearInterval(pulseRef.current);
+};
 
     pulseRef.current = setInterval(() => {
       setPulse((p) => !p);
