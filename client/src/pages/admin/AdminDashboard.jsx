@@ -32,45 +32,32 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [assigningId, setAssigningId] = useState(null);
   const [selectedPro, setSelectedPro] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "issues"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      setIssues(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const unsub = onSnapshot(q, (snap) => setIssues(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
     return unsub;
   }, []);
 
   useEffect(() => {
     const q = query(collection(db, "users"), where("role", "==", "professional"));
-    const unsub = onSnapshot(q, (snap) => {
-      setProfessionals(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const unsub = onSnapshot(q, (snap) => setProfessionals(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
     return unsub;
   }, []);
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    navigate("/login");
-  };
+  const handleLogout = async () => { await signOut(auth); navigate("/login"); };
 
   const handleAssign = async (issueId) => {
     if (!selectedPro) return;
     const pro = professionals.find((p) => p.id === selectedPro);
     if (!pro) return;
-    await updateDoc(doc(db, "issues", issueId), {
-      status: "accepted",
-      professionalId: pro.id,
-      professionalName: pro.name || pro.email,
-      eta: "To be confirmed",
-    });
+    await updateDoc(doc(db, "issues", issueId), { status: "accepted", professionalId: pro.id, professionalName: pro.name || pro.email, eta: "To be confirmed" });
     setAssigningId(null);
     setSelectedPro("");
   };
 
-  const markEscalated = async (issueId) => {
-    await updateDoc(doc(db, "issues", issueId), { status: "escalated" });
-  };
+  const markEscalated = async (issueId) => { await updateDoc(doc(db, "issues", issueId), { status: "escalated" }); };
 
   const filtered = issues.filter((i) => {
     if (activeTab === "open") return !["completed", "escalated"].includes(i.status);
@@ -86,29 +73,30 @@ const AdminDashboard = () => {
     completed: issues.filter((i) => i.status === "completed").length,
   };
 
+  const navItems = [
+    { label: "All Issues", tab: "all"       },
+    { label: "Open",       tab: "open"      },
+    { label: "Escalated",  tab: "escalated" },
+    { label: "Completed",  tab: "completed" },
+    { label: "Workers",    tab: "workers"   },
+  ];
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", fontFamily: "system-ui, sans-serif" }}>
+
+      {/* Overlay */}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 99 }} />}
+
       {/* Sidebar */}
-      <div style={{ width: "230px", background: "#0A0F1C", color: "white", display: "flex", flexDirection: "column", padding: "1.5rem 1rem", position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 100 }}>
+      <div style={{ width: "230px", background: "#0A0F1C", color: "white", display: "flex", flexDirection: "column", padding: "1.5rem 1rem", position: "fixed", top: 0, bottom: 0, zIndex: 100, left: sidebarOpen ? "0" : "-230px", transition: "left 0.3s ease" }}>
+        <button onClick={() => setSidebarOpen(false)} style={{ position: "absolute", top: "1rem", right: "1rem", background: "none", border: "none", color: "#64748B", fontSize: "1.2rem", cursor: "pointer" }}>✕</button>
         <div style={{ marginBottom: "2rem" }}>
           <h1 style={{ fontSize: "1.4rem", fontWeight: 700, margin: 0, color: "#60A5FA" }}>SnapFix</h1>
           <p style={{ fontSize: "0.7rem", color: "#475569", margin: "4px 0 0" }}>Admin Console</p>
         </div>
         <div style={{ flex: 1 }}>
-          {[
-            { label: "All Issues", tab: "all"       },
-            { label: "Open",       tab: "open"      },
-            { label: "Escalated",  tab: "escalated" },
-            { label: "Completed",  tab: "completed" },
-            { label: "Workers",    tab: "workers"   },
-          ].map((item) => (
-            <div key={item.tab} onClick={() => setActiveTab(item.tab)} style={{
-              padding: "10px 12px", borderRadius: "8px", cursor: "pointer",
-              marginBottom: "4px", fontSize: "0.85rem",
-              background: activeTab === item.tab ? "#1E3A5F" : "transparent",
-              color: activeTab === item.tab ? "#60A5FA" : "#94A3B8",
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-            }}>
+          {navItems.map((item) => (
+            <div key={item.tab} onClick={() => { setActiveTab(item.tab); setSidebarOpen(false); }} style={{ padding: "10px 12px", borderRadius: "8px", cursor: "pointer", marginBottom: "4px", fontSize: "0.85rem", background: activeTab === item.tab ? "#1E3A5F" : "transparent", color: activeTab === item.tab ? "#60A5FA" : "#94A3B8", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span>{item.label}</span>
               {item.tab === "escalated" && stats.escalated > 0 && (
                 <span style={{ background: "#DC2626", color: "white", borderRadius: "20px", padding: "1px 7px", fontSize: "0.68rem", fontWeight: 700 }}>{stats.escalated}</span>
@@ -124,34 +112,35 @@ const AdminDashboard = () => {
       </div>
 
       {/* Main */}
-      <div style={{ marginLeft: "230px", flex: 1, background: "#F8FAFF", minHeight: "100vh" }}>
-        <div style={{ background: "white", padding: "1rem 2rem", borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 50 }}>
-          <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 600, color: "#0F172A" }}>Admin Overview</h2>
-          <p style={{ margin: 0, fontSize: "0.75rem", color: "#94A3B8" }}>Manage all issues and workers</p>
+      <div style={{ flex: 1, background: "#F8FAFF", minHeight: "100vh" }}>
+        <div style={{ background: "white", padding: "1rem 1.25rem", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", gap: "12px", position: "sticky", top: 0, zIndex: 50 }}>
+          <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#0F172A", padding: "4px" }}>☰</button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600, color: "#0F172A" }}>Admin Overview</h2>
+            <p style={{ margin: 0, fontSize: "0.72rem", color: "#94A3B8" }}>Manage all issues and workers</p>
+          </div>
         </div>
 
-        <div style={{ padding: "1.5rem 2rem" }}>
-          {/* Stats */}
+        <div style={{ padding: "1.25rem" }}>
           {activeTab !== "workers" && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "1.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "10px", marginBottom: "1.25rem" }}>
               {[
                 { label: "Total",     value: stats.total,     color: "#2563EB" },
                 { label: "Open",      value: stats.open,      color: "#D97706" },
                 { label: "Escalated", value: stats.escalated, color: "#DC2626" },
                 { label: "Resolved",  value: stats.completed, color: "#059669" },
               ].map((s) => (
-                <div key={s.label} style={{ background: "white", borderRadius: "12px", padding: "1rem", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E2E8F0" }}>
-                  <div style={{ fontSize: "1.7rem", fontWeight: 700, color: s.color }}>{s.value}</div>
-                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>{s.label}</div>
+                <div key={s.label} style={{ background: "white", borderRadius: "12px", padding: "0.875rem", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E2E8F0" }}>
+                  <div style={{ fontSize: "1.6rem", fontWeight: 700, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{s.label}</div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Workers Tab */}
           {activeTab === "workers" ? (
             <div>
-              <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "#0F172A", margin: "0 0 12px" }}>Worker Roster ({professionals.length})</h3>
+              <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "#0F172A", margin: "0 0 10px" }}>Worker Roster ({professionals.length})</h3>
               {professionals.length === 0 ? (
                 <div style={{ background: "white", borderRadius: "16px", padding: "3rem", textAlign: "center", border: "1px solid #E2E8F0" }}>
                   <p style={{ color: "#64748B" }}>No professionals registered yet.</p>
@@ -159,18 +148,12 @@ const AdminDashboard = () => {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {professionals.map((pro) => (
-                    <div key={pro.id} style={{ background: "white", borderRadius: "12px", padding: "1rem 1.25rem", border: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div>
-                        <div style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.9rem" }}>{pro.name || "No name"}</div>
-                        <div style={{ fontSize: "0.78rem", color: "#64748B" }}>{pro.email} · {pro.specialty || "No specialty set"}</div>
-                      </div>
+                    <div key={pro.id} style={{ background: "white", borderRadius: "12px", padding: "1rem", border: "1px solid #E2E8F0" }}>
+                      <div style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.88rem", marginBottom: "3px" }}>{pro.name || "No name"}</div>
+                      <div style={{ fontSize: "0.75rem", color: "#64748B", marginBottom: "6px" }}>{pro.email} · {pro.specialty || "No specialty"}</div>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.72rem", padding: "3px 10px", borderRadius: "20px", fontWeight: 500, background: pro.available ? "#ECFDF5" : "#F1F5F9", color: pro.available ? "#059669" : "#64748B" }}>
-                          {pro.available ? "On Duty" : "Off Duty"}
-                        </span>
-                        {pro.jobsCompleted > 0 && (
-                          <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>{pro.jobsCompleted} jobs</span>
-                        )}
+                        <span style={{ fontSize: "0.7rem", padding: "3px 10px", borderRadius: "20px", fontWeight: 500, background: pro.available ? "#ECFDF5" : "#F1F5F9", color: pro.available ? "#059669" : "#64748B" }}>{pro.available ? "On Duty" : "Off Duty"}</span>
+                        {pro.jobsCompleted > 0 && <span style={{ fontSize: "0.7rem", color: "#94A3B8" }}>{pro.jobsCompleted} jobs</span>}
                       </div>
                     </div>
                   ))}
@@ -186,68 +169,49 @@ const AdminDashboard = () => {
               ) : filtered.map((issue) => {
                 const s = STATUS_COLORS[issue.status] || STATUS_COLORS.pending;
                 return (
-                  <div key={issue.id} style={{ background: "white", borderRadius: "14px", padding: "1.1rem 1.25rem", border: "1px solid #E2E8F0", borderLeft: `4px solid ${s.color}` }}>
-                    {issue.imageUrl && (
-                      <img src={issue.imageUrl} alt="Issue" style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "10px", marginBottom: "12px" }} />
-                    )}
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.92rem" }}>{issue.title}</span>
-                          <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: s.bg, color: s.color, fontWeight: 600, textTransform: "capitalize" }}>{issue.status.replace("_", " ")}</span>
-                          {issue.severity === "high" && (
-                            <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: "#FEF2F2", color: "#DC2626", fontWeight: 600 }}>Urgent</span>
-                          )}
-                          {issue.aiClassified && (
-                            <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: "#EFF6FF", color: "#2563EB", fontWeight: 500 }}>AI Classified</span>
-                          )}
+                  <div key={issue.id} style={{ background: "white", borderRadius: "14px", padding: "1rem", border: "1px solid #E2E8F0", borderLeft: `4px solid ${s.color}` }}>
+                    {issue.imageUrl && <img src={issue.imageUrl} alt="Issue" style={{ width: "100%", maxHeight: "160px", objectFit: "cover", borderRadius: "10px", marginBottom: "10px" }} />}
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px", flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.88rem" }}>{issue.title}</span>
+                          <span style={{ fontSize: "0.65rem", padding: "2px 7px", borderRadius: "20px", background: s.bg, color: s.color, fontWeight: 600, textTransform: "capitalize" }}>{issue.status.replace("_", " ")}</span>
+                          {issue.severity === "high" && <span style={{ fontSize: "0.65rem", padding: "2px 7px", borderRadius: "20px", background: "#FEF2F2", color: "#DC2626", fontWeight: 600 }}>Urgent</span>}
+                          {issue.aiClassified && <span style={{ fontSize: "0.65rem", padding: "2px 7px", borderRadius: "20px", background: "#EFF6FF", color: "#2563EB", fontWeight: 500 }}>AI</span>}
                         </div>
-                        {issue.aiSummary && (
-                          <p style={{ margin: "0 0 4px", color: "#7C3AED", fontSize: "0.78rem", fontStyle: "italic" }}>{issue.aiSummary}</p>
-                        )}
-                        <div style={{ fontSize: "0.8rem", color: "#64748B", marginBottom: "6px" }}>{issue.description}</div>
-                        <div style={{ display: "flex", gap: "12px", fontSize: "0.75rem", color: "#94A3B8", flexWrap: "wrap" }}>
+                        {issue.aiSummary && <p style={{ margin: "0 0 3px", color: "#7C3AED", fontSize: "0.75rem", fontStyle: "italic" }}>{issue.aiSummary}</p>}
+                        <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "5px" }}>{issue.description}</div>
+                        <div style={{ display: "flex", gap: "10px", fontSize: "0.72rem", color: "#94A3B8", flexWrap: "wrap" }}>
                           <span>{timeAgo(issue.createdAt)}</span>
                           <span>By: {issue.userEmail}</span>
                           {issue.professionalName && <span>Worker: {issue.professionalName}</span>}
                           {issue.eta && <span>ETA: {issue.eta}</span>}
                         </div>
                         {issue.rating && (
-                          <div style={{ marginTop: "8px", background: "#FFFBEB", borderRadius: "8px", padding: "8px 10px" }}>
-                            <div style={{ fontSize: "0.82rem", color: "#F59E0B" }}>
-                              {"★".repeat(issue.rating)}{"☆".repeat(5 - issue.rating)}
-                              <span style={{ color: "#64748B", marginLeft: "6px", fontSize: "0.75rem" }}>{issue.rating}/5</span>
-                            </div>
-                            {issue.feedback && (
-                              <div style={{ fontSize: "0.78rem", color: "#64748B", marginTop: "4px", fontStyle: "italic" }}>"{issue.feedback}"</div>
-                            )}
+                          <div style={{ marginTop: "8px", background: "#FFFBEB", borderRadius: "8px", padding: "7px 10px" }}>
+                            <div style={{ fontSize: "0.82rem", color: "#F59E0B" }}>{"★".repeat(issue.rating)}{"☆".repeat(5 - issue.rating)}<span style={{ color: "#64748B", marginLeft: "6px", fontSize: "0.72rem" }}>{issue.rating}/5</span></div>
+                            {issue.feedback && <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "3px", fontStyle: "italic" }}>"{issue.feedback}"</div>}
                           </div>
                         )}
                       </div>
                       {issue.status !== "completed" && (
-                        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", flexShrink: 0 }}>
                           {issue.status !== "escalated" && (
-                            <button onClick={() => markEscalated(issue.id)} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
-                              Escalate
-                            </button>
+                            <button onClick={() => markEscalated(issue.id)} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", padding: "5px 10px", cursor: "pointer", fontSize: "0.72rem", fontWeight: 500 }}>Escalate</button>
                           )}
-                          <button onClick={() => setAssigningId(assigningId === issue.id ? null : issue.id)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
-                            Assign
-                          </button>
+                          <button onClick={() => setAssigningId(assigningId === issue.id ? null : issue.id)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "5px 10px", cursor: "pointer", fontSize: "0.72rem", fontWeight: 500 }}>Assign</button>
                         </div>
                       )}
                     </div>
                     {assigningId === issue.id && (
-                      <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #E2E8F0", display: "flex", gap: "8px" }}>
+                      <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #E2E8F0", display: "flex", gap: "8px" }}>
                         <select style={{ ...inp, flex: 1 }} value={selectedPro} onChange={(e) => setSelectedPro(e.target.value)}>
                           <option value="">Select a worker...</option>
                           {professionals.filter(p => !p.specialty || p.specialty === issue.category).map((p) => (
                             <option key={p.id} value={p.id}>{p.name || p.email} ({p.specialty || "any"})</option>
                           ))}
                         </select>
-                        <button onClick={() => handleAssign(issue.id)} style={{ background: "#2563EB", color: "white", border: "none", borderRadius: "8px", padding: "0 16px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}>
-                          Confirm
-                        </button>
+                        <button onClick={() => handleAssign(issue.id)} style={{ background: "#2563EB", color: "white", border: "none", borderRadius: "8px", padding: "0 14px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}>Confirm</button>
                       </div>
                     )}
                   </div>
