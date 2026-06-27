@@ -34,7 +34,7 @@ const AdminDashboard = () => {
   const [selectedPro, setSelectedPro] = useState("");
 
   useEffect(() => {
-    const q = query(collection(db, "issues"));
+    const q = query(collection(db, "issues"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, (snap) => {
       setIssues(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
@@ -96,11 +96,11 @@ const AdminDashboard = () => {
         </div>
         <div style={{ flex: 1 }}>
           {[
-            { label: "All Issues",  tab: "all"       },
-            { label: "Open",        tab: "open"       },
-            { label: "Escalated",   tab: "escalated"  },
-            { label: "Completed",   tab: "completed"  },
-            { label: "Workers",     tab: "workers"    },
+            { label: "All Issues", tab: "all"       },
+            { label: "Open",       tab: "open"      },
+            { label: "Escalated",  tab: "escalated" },
+            { label: "Completed",  tab: "completed" },
+            { label: "Workers",    tab: "workers"   },
           ].map((item) => (
             <div key={item.tab} onClick={() => setActiveTab(item.tab)} style={{
               padding: "10px 12px", borderRadius: "8px", cursor: "pointer",
@@ -135,10 +135,10 @@ const AdminDashboard = () => {
           {activeTab !== "workers" && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "1.5rem" }}>
               {[
-                { label: "Total",     value: stats.total,     color: "#2563EB", bg: "#EFF6FF" },
-                { label: "Open",      value: stats.open,      color: "#D97706", bg: "#FFFBEB" },
-                { label: "Escalated", value: stats.escalated, color: "#DC2626", bg: "#FEF2F2" },
-                { label: "Resolved",  value: stats.completed, color: "#059669", bg: "#ECFDF5" },
+                { label: "Total",     value: stats.total,     color: "#2563EB" },
+                { label: "Open",      value: stats.open,      color: "#D97706" },
+                { label: "Escalated", value: stats.escalated, color: "#DC2626" },
+                { label: "Resolved",  value: stats.completed, color: "#059669" },
               ].map((s) => (
                 <div key={s.label} style={{ background: "white", borderRadius: "12px", padding: "1rem", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E2E8F0" }}>
                   <div style={{ fontSize: "1.7rem", fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -165,11 +165,9 @@ const AdminDashboard = () => {
                         <div style={{ fontSize: "0.78rem", color: "#64748B" }}>{pro.email} · {pro.specialty || "No specialty set"}</div>
                       </div>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                        <span style={{
-                          fontSize: "0.72rem", padding: "3px 10px", borderRadius: "20px", fontWeight: 500,
-                          background: pro.available ? "#ECFDF5" : "#F1F5F9",
-                          color: pro.available ? "#059669" : "#64748B",
-                        }}>{pro.available ? "On Duty" : "Off Duty"}</span>
+                        <span style={{ fontSize: "0.72rem", padding: "3px 10px", borderRadius: "20px", fontWeight: 500, background: pro.available ? "#ECFDF5" : "#F1F5F9", color: pro.available ? "#059669" : "#64748B" }}>
+                          {pro.available ? "On Duty" : "Off Duty"}
+                        </span>
                         {pro.jobsCompleted > 0 && (
                           <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>{pro.jobsCompleted} jobs</span>
                         )}
@@ -180,7 +178,6 @@ const AdminDashboard = () => {
               )}
             </div>
           ) : (
-            /* Issues List */
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {filtered.length === 0 ? (
                 <div style={{ background: "white", borderRadius: "16px", padding: "3rem", textAlign: "center", border: "1px solid #E2E8F0" }}>
@@ -189,60 +186,72 @@ const AdminDashboard = () => {
               ) : filtered.map((issue) => {
                 const s = STATUS_COLORS[issue.status] || STATUS_COLORS.pending;
                 return (
-  <div key={issue.id} style={{ background: "white", borderRadius: "14px", padding: "1.1rem 1.25rem", border: "1px solid #E2E8F0", borderLeft: `4px solid ${s.color}` }}>
-    {/* Image if exists */}
-    {issue.imageUrl && (
-      <img
-        src={issue.imageUrl}
-        alt="Issue"
-        style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "10px", marginBottom: "12px" }}
-      />
-    )}
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.92rem" }}>{issue.title}</span>
-          <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: s.bg, color: s.color, fontWeight: 600, textTransform: "capitalize" }}>{issue.status.replace("_", " ")}</span>
-          {issue.severity === "high" && (
-            <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: "#FEF2F2", color: "#DC2626", fontWeight: 600 }}>Urgent</span>
-          )}
-        </div>
-        <div style={{ fontSize: "0.8rem", color: "#64748B", marginBottom: "6px" }}>{issue.description}</div>
-        <div style={{ display: "flex", gap: "12px", fontSize: "0.75rem", color: "#94A3B8", flexWrap: "wrap" }}>
-          <span>{timeAgo(issue.createdAt)}</span>
-          <span>By: {issue.userEmail}</span>
-          {issue.professionalName && <span>Worker: {issue.professionalName}</span>}
-          {issue.eta && <span>ETA: {issue.eta}</span>}
-        </div>
-      </div>
-      {issue.status !== "completed" && (
-        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-          {issue.status !== "escalated" && (
-            <button onClick={() => markEscalated(issue.id)} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
-              Escalate
-            </button>
-          )}
-          <button onClick={() => setAssigningId(assigningId === issue.id ? null : issue.id)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
-            Assign
-          </button>
-        </div>
-      )}
-    </div>
-    {assigningId === issue.id && (
-      <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #E2E8F0", display: "flex", gap: "8px" }}>
-        <select style={{ ...inp, flex: 1 }} value={selectedPro} onChange={(e) => setSelectedPro(e.target.value)}>
-          <option value="">Select a worker...</option>
-          {professionals.filter(p => !p.specialty || p.specialty === issue.category).map((p) => (
-            <option key={p.id} value={p.id}>{p.name || p.email} ({p.specialty || "any"})</option>
-          ))}
-        </select>
-        <button onClick={() => handleAssign(issue.id)} style={{ background: "#2563EB", color: "white", border: "none", borderRadius: "8px", padding: "0 16px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}>
-          Confirm
-        </button>
-      </div>
-    )}
-  </div>
-);
+                  <div key={issue.id} style={{ background: "white", borderRadius: "14px", padding: "1.1rem 1.25rem", border: "1px solid #E2E8F0", borderLeft: `4px solid ${s.color}` }}>
+                    {issue.imageUrl && (
+                      <img src={issue.imageUrl} alt="Issue" style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "10px", marginBottom: "12px" }} />
+                    )}
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.92rem" }}>{issue.title}</span>
+                          <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: s.bg, color: s.color, fontWeight: 600, textTransform: "capitalize" }}>{issue.status.replace("_", " ")}</span>
+                          {issue.severity === "high" && (
+                            <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: "#FEF2F2", color: "#DC2626", fontWeight: 600 }}>Urgent</span>
+                          )}
+                          {issue.aiClassified && (
+                            <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "20px", background: "#EFF6FF", color: "#2563EB", fontWeight: 500 }}>AI Classified</span>
+                          )}
+                        </div>
+                        {issue.aiSummary && (
+                          <p style={{ margin: "0 0 4px", color: "#7C3AED", fontSize: "0.78rem", fontStyle: "italic" }}>{issue.aiSummary}</p>
+                        )}
+                        <div style={{ fontSize: "0.8rem", color: "#64748B", marginBottom: "6px" }}>{issue.description}</div>
+                        <div style={{ display: "flex", gap: "12px", fontSize: "0.75rem", color: "#94A3B8", flexWrap: "wrap" }}>
+                          <span>{timeAgo(issue.createdAt)}</span>
+                          <span>By: {issue.userEmail}</span>
+                          {issue.professionalName && <span>Worker: {issue.professionalName}</span>}
+                          {issue.eta && <span>ETA: {issue.eta}</span>}
+                        </div>
+                        {issue.rating && (
+                          <div style={{ marginTop: "8px", background: "#FFFBEB", borderRadius: "8px", padding: "8px 10px" }}>
+                            <div style={{ fontSize: "0.82rem", color: "#F59E0B" }}>
+                              {"★".repeat(issue.rating)}{"☆".repeat(5 - issue.rating)}
+                              <span style={{ color: "#64748B", marginLeft: "6px", fontSize: "0.75rem" }}>{issue.rating}/5</span>
+                            </div>
+                            {issue.feedback && (
+                              <div style={{ fontSize: "0.78rem", color: "#64748B", marginTop: "4px", fontStyle: "italic" }}>"{issue.feedback}"</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {issue.status !== "completed" && (
+                        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                          {issue.status !== "escalated" && (
+                            <button onClick={() => markEscalated(issue.id)} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
+                              Escalate
+                            </button>
+                          )}
+                          <button onClick={() => setAssigningId(assigningId === issue.id ? null : issue.id)} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}>
+                            Assign
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {assigningId === issue.id && (
+                      <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #E2E8F0", display: "flex", gap: "8px" }}>
+                        <select style={{ ...inp, flex: 1 }} value={selectedPro} onChange={(e) => setSelectedPro(e.target.value)}>
+                          <option value="">Select a worker...</option>
+                          {professionals.filter(p => !p.specialty || p.specialty === issue.category).map((p) => (
+                            <option key={p.id} value={p.id}>{p.name || p.email} ({p.specialty || "any"})</option>
+                          ))}
+                        </select>
+                        <button onClick={() => handleAssign(issue.id)} style={{ background: "#2563EB", color: "white", border: "none", borderRadius: "8px", padding: "0 16px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}>
+                          Confirm
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
               })}
             </div>
           )}

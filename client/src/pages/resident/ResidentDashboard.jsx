@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { signOut } from "firebase/auth";
-import { collection, addDoc, query, where, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, query, where, onSnapshot, serverTimestamp, updateDoc, doc, getDoc } from "firebase/firestore";
 import { ref, set } from "firebase/database";
 import { auth, db, rtdb } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
@@ -46,6 +46,9 @@ const ResidentDashboard = () => {
   const [classifying, setClassifying] = useState(false);
   const [aiResult, setAiResult] = useState(null);
   const [activeTab, setActiveTab] = useState("all");
+  const [ratingIssueId, setRatingIssueId] = useState(null);
+  const [rating, setRating] = useState(0);
+  const [feedback, setFeedback] = useState("");
   const [form, setForm] = useState({
     title: "", description: "", category: "plumbing",
     imageUrl: "", severity: "medium",
@@ -117,6 +120,7 @@ Respond with exactly this format:
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
+        
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -126,12 +130,7 @@ Respond with exactly this format:
                 parts: imageUrl
                   ? [
                       { text: prompt },
-                      {
-                        inline_data: {
-                          mime_type: "image/jpeg",
-                          data: await imageToBase64(imageUrl),
-                        },
-                      },
+                      { inline_data: { mime_type: "image/jpeg", data: await imageToBase64(imageUrl) } },
                     ]
                   : [{ text: prompt }],
               },
@@ -140,8 +139,8 @@ Respond with exactly this format:
         }
       );
       const data = await response.json();
-console.log("Gemini raw response:", JSON.stringify(data));
-const text = data.candidates[0].content.parts[0].text;
+      if (data.error) { console.error("Gemini API error:", data.error.message); return null; }
+      const text = data.candidates[0].content.parts[0].text;
       const cleaned = text.replace(/```json|```/g, "").trim();
       return JSON.parse(cleaned);
     } catch (err) {
@@ -176,6 +175,8 @@ const text = data.candidates[0].content.parts[0].text;
         professionalId: null,
         professionalName: null,
         eta: null,
+        rating: null,
+        feedback: null,
       });
 
       try {
@@ -192,6 +193,18 @@ const text = data.candidates[0].content.parts[0].text;
         console.error("RTDB ping failed:", rtdbErr);
       }
 
+      // Fallback timer — 10 mins no response → escalate
+      setTimeout(async () => {
+        try {
+          const issueSnap = await getDoc(doc(db, "issues", issueRef.id));
+          if (issueSnap.exists() && issueSnap.data().status === "pending") {
+            await updateDoc(doc(db, "issues", issueRef.id), { status: "escalated" });
+          }
+        } catch (err) {
+          console.error("Fallback timer error:", err);
+        }
+      }, 10 * 60 * 1000);
+
       setForm({ title: "", description: "", category: "plumbing", imageUrl: "", severity: "medium" });
       setAiResult(null);
       setShowForm(false);
@@ -200,6 +213,16 @@ const text = data.candidates[0].content.parts[0].text;
       alert("Error submitting issue.");
     }
     setSubmitting(false);
+  };
+
+  const handleRate = async (issueId, stars) => {
+    await updateDoc(doc(db, "issues", issueId), {
+      rating: stars,
+      feedback: feedback || "",
+    });
+    setRatingIssueId(null);
+    setRating(0);
+    setFeedback("");
   };
 
   const handleLogout = async () => {
@@ -235,9 +258,9 @@ const text = data.candidates[0].content.parts[0].text;
         </div>
         <div style={{ flex: 1 }}>
           {[
-            { label: "Dashboard",    tab: "all"      },
-            { label: "Open Issues",  tab: "open"     },
-            { label: "Resolved",     tab: "resolved" },
+            { label: "Dashboard",   tab: "all"      },
+            { label: "Open Issues", tab: "open"     },
+            { label: "Resolved",    tab: "resolved" },
           ].map((item) => (
             <div key={item.tab} onClick={() => setActiveTab(item.tab)} style={{
               padding: "10px 12px", borderRadius: "8px", cursor: "pointer",
@@ -262,7 +285,6 @@ const text = data.candidates[0].content.parts[0].text;
 
       {/* Main Content */}
       <div style={{ marginLeft: "230px", flex: 1, background: "#F8FAFF", minHeight: "100vh" }}>
-        {/* Topbar */}
         <div style={{
           background: "white", padding: "1rem 2rem", borderBottom: "1px solid #E2E8F0",
           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -301,8 +323,7 @@ const text = data.candidates[0].content.parts[0].text;
                 <div style={{
                   width: "44px", height: "44px", borderRadius: "10px",
                   background: s.bg, display: "flex", alignItems: "center",
-                  justifyContent: "center", fontSize: "1.4rem", fontWeight: 700,
-                  color: s.color,
+                  justifyContent: "center", fontSize: "1.4rem", fontWeight: 700, color: s.color,
                 }}>{s.value}</div>
                 <div style={{ fontSize: "0.75rem", color: "#64748B" }}>{s.label}</div>
               </div>
@@ -448,6 +469,60 @@ const text = data.candidates[0].content.parts[0].text;
                         {issue.professionalName && <span>Worker: {issue.professionalName}</span>}
                         {issue.eta && <span>ETA: {issue.eta}</span>}
                       </div>
+
+                      {/* Rating Section */}
+                      {issue.status === "completed" && !issue.rating && (
+                        <div style={{ marginTop: "10px" }}>
+                          {ratingIssueId === issue.id ? (
+                            <div>
+                              <div style={{ display: "flex", gap: "4px", alignItems: "center", marginBottom: "8px" }}>
+                                <span style={{ fontSize: "0.78rem", color: "#64748B", marginRight: "4px" }}>Rate:</span>
+                                {[1,2,3,4,5].map((star) => (
+                                  <span
+                                    key={star}
+                                    onClick={() => setRating(star)}
+                                    onMouseEnter={() => setRating(star)}
+                                    onMouseLeave={() => setRating(rating)}
+                                    style={{ fontSize: "1.4rem", cursor: "pointer", color: star <= rating ? "#F59E0B" : "#D1D5DB" }}
+                                  >★</span>
+                                ))}
+                              </div>
+                              <textarea
+                                placeholder="Leave feedback (optional)..."
+                                value={feedback}
+                                onChange={(e) => setFeedback(e.target.value)}
+                                style={{ width: "100%", padding: "8px", border: "1px solid #E2E8F0", borderRadius: "8px", fontSize: "0.78rem", resize: "none", height: "60px", boxSizing: "border-box", marginBottom: "8px" }}
+                              />
+                              <button
+                                onClick={() => handleRate(issue.id, rating)}
+                                disabled={rating === 0}
+                                style={{ background: rating === 0 ? "#E2E8F0" : "#2563EB", color: rating === 0 ? "#94A3B8" : "white", border: "none", borderRadius: "8px", padding: "6px 16px", cursor: rating === 0 ? "not-allowed" : "pointer", fontSize: "0.78rem", fontWeight: 600 }}
+                              >
+                                Submit Rating
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setRatingIssueId(issue.id)}
+                              style={{ background: "none", border: "1px solid #E2E8F0", borderRadius: "8px", padding: "4px 12px", cursor: "pointer", fontSize: "0.75rem", color: "#64748B" }}
+                            >
+                              Rate this job
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {issue.rating && (
+                        <div style={{ marginTop: "8px", background: "#FFFBEB", borderRadius: "8px", padding: "8px 12px" }}>
+                          <div style={{ fontSize: "0.82rem", color: "#F59E0B" }}>
+                            {"★".repeat(issue.rating)}{"☆".repeat(5 - issue.rating)}
+                            <span style={{ color: "#64748B", marginLeft: "6px", fontSize: "0.75rem" }}>{issue.rating}/5</span>
+                          </div>
+                          {issue.feedback && (
+                            <div style={{ fontSize: "0.78rem", color: "#64748B", marginTop: "4px", fontStyle: "italic" }}>"{issue.feedback}"</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

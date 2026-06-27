@@ -1,25 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { signOut } from "firebase/auth";
-import { doc, getDoc, updateDoc, onSnapshot, collection, query, where, orderBy, increment } from "firebase/firestore";
+import { doc, updateDoc, onSnapshot, collection, query, where, increment } from "firebase/firestore";
 import { ref, onValue, off, remove } from "firebase/database";
 import { auth, db, rtdb } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-const SPECIALTIES = [
-  { value: "plumbing",    label: "Plumbing"    },
-  { value: "electrical",  label: "Electrical"  },
-  { value: "mechanical",  label: "Mechanical"  },
-  { value: "cleaning",    label: "Cleaning"    },
-  { value: "other",       label: "Other"       },
+const STATUS_STEPS = [
+  { value: "accepted",    label: "Accepted"      },
+  { value: "en_route",    label: "En Route"      },
+  { value: "arrived",     label: "Arrived"       },
+  { value: "in_progress", label: "In Progress"   },
+  { value: "completed",   label: "Mark Complete" },
 ];
 
-const STATUS_STEPS = [
-  { value: "accepted",    label: "Accepted"    },
-  { value: "en_route",    label: "En Route"    },
-  { value: "arrived",     label: "Arrived"     },
-  { value: "in_progress", label: "In Progress" },
-  { value: "completed",   label: "Mark Complete" },
+const SPECIALTIES = [
+  { value: "plumbing",   label: "Plumbing"   },
+  { value: "electrical", label: "Electrical" },
+  { value: "mechanical", label: "Mechanical" },
+  { value: "cleaning",   label: "Cleaning"   },
+  { value: "other",      label: "Other"      },
 ];
 
 const timeAgo = (ts) => {
@@ -43,8 +43,87 @@ const ProfessionalDashboard = () => {
   const [showEta, setShowEta] = useState(false);
   const [savingSpecialty, setSavingSpecialty] = useState(false);
   const [selectedSpecialty, setSelectedSpecialty] = useState("plumbing");
+  const [countdown, setCountdown] = useState(60);
+  const [pulse, setPulse] = useState(false);
+  const countdownRef = useRef(null);
+  const pulseRef = useRef(null);
 
-  // Load user data
+  // Inject keyframe animation
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.innerHTML = `
+      @keyframes snapfixPulse {
+        0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.7); }
+        70% { box-shadow: 0 0 0 20px rgba(37,99,235,0); }
+        100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+      }
+      @keyframes snapfixRing {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
+  const playAlertSound = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const playBeep = (time, freq, duration) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0.4, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        osc.start(time);
+        osc.stop(time + duration);
+      };
+      playBeep(ctx.currentTime, 880, 0.25);
+      playBeep(ctx.currentTime + 0.3, 880, 0.25);
+      playBeep(ctx.currentTime + 0.6, 1100, 0.4);
+    } catch (e) {
+      console.log("Sound not supported");
+    }
+  };
+
+  // Start countdown when ping arrives
+  useEffect(() => {
+    if (!currentPing) {
+      clearInterval(countdownRef.current);
+      clearInterval(pulseRef.current);
+      setCountdown(60);
+      return;
+    }
+
+    playAlertSound();
+    setCountdown(60);
+
+    pulseRef.current = setInterval(() => {
+      setPulse((p) => !p);
+    }, 800);
+
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current);
+          clearInterval(pulseRef.current);
+          handleDeclineAuto();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(countdownRef.current);
+      clearInterval(pulseRef.current);
+    };
+  }, [currentPing?.issueId]);
+
   useEffect(() => {
     if (!currentUser) return;
     const unsub = onSnapshot(doc(db, "users", currentUser.uid), (snap) => {
@@ -58,7 +137,6 @@ const ProfessionalDashboard = () => {
     return unsub;
   }, [currentUser]);
 
-  // Listen to RTDB pings for this specialty
   useEffect(() => {
     if (!specialty || !available) return;
     const pingRef = ref(rtdb, `pings/${specialty}`);
@@ -70,7 +148,6 @@ const ProfessionalDashboard = () => {
     return () => off(pingRef);
   }, [specialty, available]);
 
-  // Listen to active job if any
   useEffect(() => {
     if (!currentUser) return;
     const q = query(
@@ -85,18 +162,23 @@ const ProfessionalDashboard = () => {
     return unsub;
   }, [currentUser]);
 
-  // Load job history
   useEffect(() => {
     if (!currentUser) return;
     const q = query(
       collection(db, "issues"),
-      where("professionalId", "==", currentUser.uid),
-      where("status", "==", "completed"),
-      
+      where("professionalId", "==", currentUser.uid)
     );
     const unsub = onSnapshot(q, (snap) => {
-      setJobs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+  const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  setJobs(
+    all
+      .filter((j) => j.status === "completed")
+      .sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return 0;
+        return b.createdAt.toMillis() - a.createdAt.toMillis();
+      })
+  );
+});
     return unsub;
   }, [currentUser]);
 
@@ -114,6 +196,8 @@ const ProfessionalDashboard = () => {
 
   const handleAccept = async () => {
     if (!etaInput) { setShowEta(true); return; }
+    clearInterval(countdownRef.current);
+    clearInterval(pulseRef.current);
     await updateDoc(doc(db, "issues", currentPing.issueId), {
       status: "accepted",
       professionalId: currentUser.uid,
@@ -127,17 +211,24 @@ const ProfessionalDashboard = () => {
   };
 
   const handleDecline = async () => {
+    clearInterval(countdownRef.current);
+    clearInterval(pulseRef.current);
     await remove(ref(rtdb, `pings/${specialty}`));
     setCurrentPing(null);
+  };
+
+  const handleDeclineAuto = async () => {
+    try {
+      await remove(ref(rtdb, `pings/${specialty}`));
+      setCurrentPing(null);
+    } catch (e) {}
   };
 
   const updateStatus = async (status) => {
     if (!activeJob) return;
     await updateDoc(doc(db, "issues", activeJob.id), { status });
     if (status === "completed") {
-      await updateDoc(doc(db, "users", currentUser.uid), {
-        jobsCompleted: increment(1),
-      });
+      await updateDoc(doc(db, "users", currentUser.uid), { jobsCompleted: increment(1) });
     }
   };
 
@@ -165,10 +256,122 @@ const ProfessionalDashboard = () => {
   }
 
   const currentStatusIndex = activeJob ? STATUS_STEPS.findIndex(s => s.value === activeJob.status) : -1;
-  const nextStep = currentStatusIndex < STATUS_STEPS.length - 1 ? STATUS_STEPS[currentStatusIndex + 1] : null;
+  const nextStep = currentStatusIndex < STATUS_STEPS.length - 2 ? STATUS_STEPS[currentStatusIndex + 1] : null;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", fontFamily: "system-ui, sans-serif" }}>
+
+      {/* UBER-STYLE FULL SCREEN PING OVERLAY */}
+      {currentPing && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.88)", zIndex: 999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "#0A0F1C",
+            borderRadius: "24px",
+            padding: "2rem",
+            width: "100%",
+            maxWidth: "400px",
+            margin: "0 1rem",
+            border: `2px solid ${pulse ? "#2563EB" : "#1E3A5F"}`,
+            boxShadow: pulse ? "0 0 40px rgba(37,99,235,0.5)" : "0 0 20px rgba(37,99,235,0.2)",
+            animation: "snapfixRing 0.8s ease-in-out infinite",
+            transition: "box-shadow 0.4s, border-color 0.4s",
+          }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{
+                  width: "10px", height: "10px", borderRadius: "50%",
+                  background: "#F59E0B",
+                  boxShadow: "0 0 8px #F59E0B",
+                  animation: "snapfixPulse 1s infinite",
+                }} />
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#F59E0B", letterSpacing: "0.1em" }}>NEW JOB REQUEST</span>
+              </div>
+              <div style={{
+                background: countdown <= 10 ? "#DC2626" : "#1E293B",
+                color: countdown <= 10 ? "white" : "#94A3B8",
+                borderRadius: "20px", padding: "4px 12px",
+                fontSize: "0.82rem", fontWeight: 700,
+                transition: "background 0.3s",
+              }}>
+                {countdown}s
+              </div>
+            </div>
+
+            {/* Issue details */}
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "white", margin: "0 0 6px" }}>
+              {currentPing.title}
+            </h2>
+            <div style={{ fontSize: "0.82rem", color: "#64748B", marginBottom: "1rem", textTransform: "capitalize" }}>
+              {currentPing.category} · {currentPing.severity} severity
+            </div>
+            <div style={{ fontSize: "0.78rem", color: "#475569", marginBottom: "1.25rem" }}>
+              Requested by {currentPing.userEmail}
+            </div>
+
+            {/* Image if exists */}
+            {currentPing.imageUrl && (
+              <img
+                src={currentPing.imageUrl}
+                alt="Issue"
+                style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "12px", marginBottom: "1.25rem" }}
+              />
+            )}
+
+            {/* Countdown bar */}
+            <div style={{ background: "#1E293B", borderRadius: "4px", height: "4px", marginBottom: "1.5rem", overflow: "hidden" }}>
+              <div style={{
+                height: "100%", borderRadius: "4px",
+                background: countdown <= 10 ? "#DC2626" : "#2563EB",
+                width: `${(countdown / 60) * 100}%`,
+                transition: "width 1s linear, background 0.3s",
+              }} />
+            </div>
+
+            {/* ETA input or buttons */}
+            {showEta ? (
+              <div>
+                <p style={{ fontSize: "0.82rem", color: "#94A3B8", marginBottom: "8px" }}>How long until you arrive?</p>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    style={{ ...inp, flex: 1, background: "#0F172A", color: "white", border: "1px solid #1E293B" }}
+                    placeholder="e.g. 15 minutes"
+                    value={etaInput}
+                    onChange={(e) => setEtaInput(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleAccept}
+                    style={{ background: "#059669", color: "white", border: "none", borderRadius: "10px", padding: "0 20px", cursor: "pointer", fontWeight: 700, fontSize: "0.875rem" }}
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <button
+                  onClick={handleDecline}
+                  style={{ background: "#1E293B", color: "#94A3B8", border: "none", borderRadius: "12px", padding: "14px", cursor: "pointer", fontSize: "0.9rem", fontWeight: 600 }}
+                >
+                  Decline
+                </button>
+                <button
+                  onClick={() => setShowEta(true)}
+                  style={{ background: "#2563EB", color: "white", border: "none", borderRadius: "12px", padding: "14px", cursor: "pointer", fontSize: "0.9rem", fontWeight: 700, boxShadow: "0 4px 14px rgba(37,99,235,0.4)" }}
+                >
+                  Accept
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <div style={{ width: "230px", background: "#0A0F1C", color: "white", display: "flex", flexDirection: "column", padding: "1.5rem 1rem", position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 100 }}>
         <div style={{ marginBottom: "2rem" }}>
@@ -185,15 +388,8 @@ const ProfessionalDashboard = () => {
               <div style={{ fontSize: "0.72rem", color: "#475569", marginBottom: "2px" }}>Status</div>
               <div style={{ fontSize: "0.875rem", color: available ? "#10B981" : "#EF4444", fontWeight: 600 }}>{available ? "On Duty" : "Off Duty"}</div>
             </div>
-            <div onClick={toggleAvailable} style={{
-              width: "40px", height: "22px", borderRadius: "11px", cursor: "pointer",
-              background: available ? "#10B981" : "#374151", position: "relative", transition: "background 0.2s",
-            }}>
-              <div style={{
-                width: "18px", height: "18px", borderRadius: "50%", background: "white",
-                position: "absolute", top: "2px", transition: "left 0.2s",
-                left: available ? "20px" : "2px",
-              }} />
+            <div onClick={toggleAvailable} style={{ width: "40px", height: "22px", borderRadius: "11px", cursor: "pointer", background: available ? "#10B981" : "#374151", position: "relative", transition: "background 0.2s" }}>
+              <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: "white", position: "absolute", top: "2px", transition: "left 0.2s", left: available ? "20px" : "2px" }} />
             </div>
           </div>
         </div>
@@ -206,58 +402,18 @@ const ProfessionalDashboard = () => {
 
       {/* Main */}
       <div style={{ marginLeft: "230px", flex: 1, background: "#F8FAFF", minHeight: "100vh" }}>
-        <div style={{ background: "white", padding: "1rem 2rem", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 600, color: "#0F172A" }}>Job Dashboard</h2>
-            <p style={{ margin: 0, fontSize: "0.75rem", color: "#94A3B8" }}>{userData?.name} · {jobs.length} jobs completed</p>
-          </div>
+        <div style={{ background: "white", padding: "1rem 2rem", borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 50 }}>
+          <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 600, color: "#0F172A" }}>Job Dashboard</h2>
+          <p style={{ margin: 0, fontSize: "0.75rem", color: "#94A3B8" }}>{userData?.name} · {jobs.length} jobs completed</p>
         </div>
 
         <div style={{ padding: "1.5rem 2rem" }}>
-          {/* Incoming Ping */}
-          {currentPing && (
-            <div style={{ background: "#0A0F1C", borderRadius: "16px", padding: "1.5rem", marginBottom: "1.5rem", border: "1px solid #1E3A5F" }}>
-              <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "#F59E0B", letterSpacing: "0.08em", marginBottom: "10px" }}>INCOMING JOB REQUEST</div>
-              <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "white", marginBottom: "6px" }}>{currentPing.title}</div>
-              <div style={{ fontSize: "0.82rem", color: "#64748B", marginBottom: "1rem", textTransform: "capitalize" }}>
-  {currentPing.category} · {currentPing.severity} severity · Requested by {currentPing.userEmail}
-</div>
-{currentPing.imageUrl && (
-  <img
-    src={currentPing.imageUrl}
-    alt="Issue"
-    style={{
-      width: "100%", maxHeight: "200px", objectFit: "cover",
-      borderRadius: "10px", marginBottom: "1rem",
-    }}
-  />
-)}
-              {showEta ? (
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <input
-                    style={{ ...inp, flex: 1, background: "#0F172A", color: "white", border: "1px solid #1E293B" }}
-                    placeholder="ETA e.g. 15 minutes"
-                    value={etaInput}
-                    onChange={(e) => setEtaInput(e.target.value)}
-                  />
-                  <button onClick={handleAccept} style={{ background: "#059669", color: "white", border: "none", borderRadius: "8px", padding: "0 20px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}>Confirm</button>
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button onClick={() => setShowEta(true)} style={{ background: "#2563EB", color: "white", border: "none", borderRadius: "10px", padding: "10px 24px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}>Accept Job</button>
-                  <button onClick={handleDecline} style={{ background: "#1E293B", color: "#94A3B8", border: "none", borderRadius: "10px", padding: "10px 24px", cursor: "pointer", fontSize: "0.875rem" }}>Decline</button>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Active Job */}
           {activeJob && (
             <div style={{ background: "white", borderRadius: "16px", padding: "1.5rem", marginBottom: "1.5rem", border: "1px solid #BFDBFE", boxShadow: "0 4px 20px rgba(37,99,235,0.08)" }}>
               <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "#2563EB", letterSpacing: "0.08em", marginBottom: "10px" }}>ACTIVE JOB</div>
               <div style={{ fontSize: "1rem", fontWeight: 600, color: "#0F172A", marginBottom: "4px" }}>{activeJob.title}</div>
               <div style={{ fontSize: "0.82rem", color: "#64748B", marginBottom: "1.25rem" }}>{activeJob.description}</div>
-              {/* Status Steps */}
               <div style={{ display: "flex", gap: "6px", marginBottom: "1.25rem", flexWrap: "wrap" }}>
                 {STATUS_STEPS.slice(0, -1).map((step, i) => (
                   <div key={step.value} style={{
@@ -270,7 +426,7 @@ const ProfessionalDashboard = () => {
               </div>
               <div style={{ display: "flex", gap: "10px" }}>
                 {nextStep && (
-                  <button onClick={() => updateStatus(nextStep.value)} style={{ ...primaryBtn, padding: "10px 24px" }}>
+                  <button onClick={() => updateStatus(nextStep.value)} style={primaryBtn}>
                     {nextStep.label}
                   </button>
                 )}
@@ -281,11 +437,15 @@ const ProfessionalDashboard = () => {
             </div>
           )}
 
-          {/* No active job, not pinged */}
+          {/* No active job */}
           {!currentPing && !activeJob && (
             <div style={{ background: "white", borderRadius: "16px", padding: "3rem 2rem", textAlign: "center", border: "1px solid #E2E8F0", marginBottom: "1.5rem" }}>
-              <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>{available ? "Waiting for jobs..." : "You are off duty"}</div>
-              <p style={{ color: "#64748B", fontSize: "0.875rem" }}>{available ? "You'll be notified when a matching request comes in." : "Toggle your status to start receiving requests."}</p>
+              <p style={{ color: "#0F172A", fontSize: "1.1rem", fontWeight: 500, marginBottom: "8px" }}>
+                {available ? "Waiting for jobs..." : "You are off duty"}
+              </p>
+              <p style={{ color: "#64748B", fontSize: "0.875rem", margin: 0 }}>
+                {available ? "You'll be notified when a matching request comes in." : "Toggle your status to start receiving requests."}
+              </p>
             </div>
           )}
 
@@ -297,7 +457,20 @@ const ProfessionalDashboard = () => {
                 {jobs.map((job) => (
                   <div key={job.id} style={{ background: "white", borderRadius: "12px", padding: "1rem", border: "1px solid #E2E8F0", borderLeft: "4px solid #059669" }}>
                     <div style={{ fontWeight: 600, color: "#0F172A", fontSize: "0.9rem", marginBottom: "4px" }}>{job.title}</div>
-                    <div style={{ fontSize: "0.78rem", color: "#64748B" }}>{timeAgo(job.createdAt)} · {job.category}</div>
+                    <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "8px" }}>{timeAgo(job.createdAt)} · {job.category}</div>
+                    {job.rating ? (
+                      <div style={{ background: "#FFFBEB", borderRadius: "8px", padding: "8px 10px" }}>
+                        <div style={{ fontSize: "0.82rem", color: "#F59E0B" }}>
+                          {"★".repeat(job.rating)}{"☆".repeat(5 - job.rating)}
+                          <span style={{ color: "#64748B", marginLeft: "6px", fontSize: "0.75rem" }}>Rated {job.rating}/5</span>
+                        </div>
+                        {job.feedback && (
+                          <div style={{ fontSize: "0.78rem", color: "#64748B", marginTop: "4px", fontStyle: "italic" }}>"{job.feedback}"</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "0.75rem", color: "#94A3B8" }}>Rating pending from resident</div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -311,6 +484,6 @@ const ProfessionalDashboard = () => {
 
 const lbl = { display: "block", fontSize: "0.78rem", fontWeight: 500, color: "#374151", marginBottom: "6px" };
 const inp = { width: "100%", padding: "0.65rem 0.875rem", border: "1px solid #E2E8F0", borderRadius: "8px", fontSize: "0.875rem", boxSizing: "border-box", background: "#F8FAFC", color: "#0F172A" };
-const primaryBtn = { background: "#2563EB", color: "white", border: "none", borderRadius: "10px", padding: "12px 28px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" };
+const primaryBtn = { background: "#2563EB", color: "white", border: "none", borderRadius: "10px", padding: "10px 24px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" };
 
 export default ProfessionalDashboard;
