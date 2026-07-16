@@ -1,4 +1,4 @@
-# 🛠️ SnapFix
+#  SnapFix
 
 > AI-powered community maintenance platform connecting residents with nearby professionals in real time.
 
@@ -10,7 +10,7 @@
 
 ---
 
-## 📖 Overview
+##  Overview
 
 SnapFix is an AI-powered maintenance platform that helps residential communities report and resolve maintenance issues quickly.
 
@@ -18,17 +18,17 @@ Residents simply upload a photo and describe the problem. Gemini AI automaticall
 
 The platform supports three user roles:
 
-- 👤 Resident
-- 👨‍🔧 Professional
-- 🛡️ Admin
+- Resident
+-  Professional
+- Admin
 
 From reporting to resolution, every step is tracked live.
 
 ---
 
-## 🚀 Features
+##  Features
 
-### 🤖 AI Issue Classification
+###  AI Issue Classification
 
 Powered by **Gemini 2.0 Flash**, the system analyzes uploaded images and descriptions to determine:
 
@@ -38,13 +38,13 @@ Powered by **Gemini 2.0 Flash**, the system analyzes uploaded images and descrip
 
 ---
 
-### 📸 Photo Upload
+###  Photo Upload
 
 Residents can upload issue photos securely using **Cloudinary**.
 
 ---
 
-### 🔔 Real-Time Professional Ring
+###  Real-Time Professional Ring
 
 When an issue is created:
 
@@ -58,7 +58,7 @@ Powered by Firebase Realtime Database.
 
 ---
 
-### 📊 Live Status Tracking
+###  Live Status Tracking
 
 Track every maintenance request through multiple stages:
 
@@ -78,7 +78,7 @@ Resolved
 
 ---
 
-### 👥 Role-Based Dashboards
+###  Role-Based Dashboards
 
 #### Resident
 
@@ -105,7 +105,7 @@ Resolved
 
 ---
 
-### ⭐ Rating & Feedback
+###  Rating & Feedback
 
 Residents can rate professionals after issue resolution.
 
@@ -113,13 +113,13 @@ Ratings are visible across dashboards to improve transparency and accountability
 
 ---
 
-### ⏳ Automatic Escalation
+###  Automatic Escalation
 
 If no professional accepts a request within **10 minutes**, the issue is automatically escalated to the admin dashboard.
 
 ---
 
-## 🏗️ Tech Stack
+##  Tech Stack
 
 ### Frontend
 
@@ -145,7 +145,7 @@ If no professional accepts a request within **10 minutes**, the issue is automat
 
 ---
 
-## 🛠️ Google Technologies
+##  Google Technologies
 
 - Gemini 2.0 Flash API
 - Firebase Authentication
@@ -173,7 +173,7 @@ src/
 
 ---
 
-## ⚙️ Installation
+##  Installation
 
 Clone the repository
 
@@ -201,7 +201,7 @@ npm run dev
 
 ---
 
-## 🔐 Environment Variables
+## Environment Variables
 
 Create a `.env` file and add:
 
@@ -218,19 +218,19 @@ VITE_GEMINI_API_KEY=
 
 ---
 
-## 🌐 Live Demo
+## Live Demo
 
 https://fastidious-lokum-511463.netlify.app
 
 ---
 
-## 💻 GitHub Repository
+##  GitHub Repository
 
 https://github.com/Palakvirk/snapfix
 
 ---
 
-## 🎯 Future Improvements
+##  Future Improvements
 
 - Google Maps integration
 - Push notifications
@@ -242,7 +242,7 @@ https://github.com/Palakvirk/snapfix
 
 ---
 
-## 👩‍💻 Author
+##  Author
 
 **Palak Virk**
 
